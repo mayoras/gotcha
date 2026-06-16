@@ -17,13 +17,12 @@
 #include <fcntl.h>
 #include <android/log.h>
 
+#include <log.h>
 #include "zygisk.hpp"
 
 using zygisk::Api;
 using zygisk::AppSpecializeArgs;
 using zygisk::ServerSpecializeArgs;
-
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "MyModule", __VA_ARGS__)
 
 class MyModule : public zygisk::ModuleBase {
 public:

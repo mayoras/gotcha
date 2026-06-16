@@ -1,0 +1,10 @@
+ext {
+    moduleLibraryName = "gotcha"
+    magiskModuleId = "gotcha"
+    moduleName = "GOTcha"
+    toolName = "gotcha"
+    moduleAuthor = "mayoras"
+    moduleDescription = "A Zygisk module that installs trampolines into GOT entries for tracing of functions"
+    moduleVersion = "v0.1.0"
+    moduleVersionCode = 1
+}

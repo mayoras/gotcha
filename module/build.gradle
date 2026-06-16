@@ -2,10 +2,26 @@ plugins {
     id 'com.android.library'
 }
 
+apply from:(rootProject.file('module.gradle'))
+
 android {
+    namespace 'net.mayoras.gotcha'
+
     externalNativeBuild {
-        ndkBuild {
-            path("jni/Android.mk")
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
         }
     }
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        externalNativeBuild {
+            cmake {
+                arguments "-DMODULE_NAME:STRING=$moduleLibraryName"
+            }
+        }
+    }
+    ndkVersion '23.1.7779620'
+    compileSdk rootProject.ext.compileSdkVersion
 }
