@@ -175,12 +175,12 @@ public:
     }
 
 private:
-    Api *api;
-    JNIEnv *env;
+    Api *api{};
+    JNIEnv *env{};
     bool _enableGotcha = false;
-    char *_targetPackageName;
-    char *_gotchaLibraryPath;
-    uint64_t _delay;
+    char *_targetPackageName{};
+    char *_gotchaLibraryPath{};
+    uint64_t _delay{};
 };
 
 static void companion_handler(int i) {
