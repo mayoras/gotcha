@@ -39,7 +39,7 @@ static std::string recvString(int fd) {
     return buffer.data();
 }
 
-static oid sendString(int fd, const std::string &str) {
+static void sendString(int fd, const std::string &str) {
     size_t len = str.size() + 1;
     write(fd, &len, sizeof(len));
     write(fd, str.c_str(), len);
