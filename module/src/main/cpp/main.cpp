@@ -39,7 +39,7 @@ static std::string recvString(int fd) {
     return buffer.data();
 }
 
-static void sendString(int fd, std::string str) {
+static oid sendString(int fd, const std::string &str) {
     size_t len = str.size() + 1;
     write(fd, &len, sizeof(len));
     write(fd, str.c_str(), len);
@@ -76,13 +76,13 @@ static void copyFile(const char *src, const char *dst) {
     FILE *fsrc, *fdst;
 
     fsrc = fopen(src, "rb");
-    if (fsrc == NULL) {
+    if (fsrc == nullptr) {
         LOGE("Failed to open source file: %s", src);
         goto finally;
     }
 
     fdst = fopen(dst, "wb");
-    if (fdst == NULL) {
+    if (fdst == nullptr) {
         LOGE("Failed to open destination file: %s", dst);
         goto finally;
     }
@@ -99,9 +99,9 @@ static void copyFile(const char *src, const char *dst) {
 
     finally:
     {
-        if (fsrc != NULL)
+        if (fsrc != nullptr)
             fclose(fsrc);
-        if (fdst != NULL)
+        if (fdst != nullptr)
             fclose(fdst);
     }
 }
