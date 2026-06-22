@@ -1,3 +1,8 @@
+import org.apache.tools.ant.filters.FixCrLfFilter
+
+import java.nio.file.Paths
+import java.nio.file.Files
+
 plugins {
     id 'com.android.library'
 }
@@ -18,10 +23,82 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         externalNativeBuild {
             cmake {
-                arguments "-DMODULE_NAME:STRING=$moduleLibraryName"
+                arguments "-DMODULE_NAME:STRING=$moduleLibraryName", "-DMODULE_DIR:STRING=$magiskModuleId"
             }
         }
     }
-    ndkVersion '23.1.7779620'
+
+    ndkVersion '25.2.9519653'
     compileSdk rootProject.ext.compileSdkVersion
+
+    buildFeatures {
+        prefab true
+    }
+}
+
+afterEvaluate {
+    android.libraryVariants.forEach { variant ->
+        def variantCapped = variant.name.capitalize()
+        def variantLowered = variant.name.toLowerCase()
+
+        def zipName = "${magiskModuleId.replace('_', '-')}-${moduleVersion}-${variantLowered}.zip"
+        def magiskDir = file("$outDir/magisk_module_$variantLowered")
+
+        // task to prepare magisk module out structure
+        task("prepareMagiskFiles${variantCapped}", type: Sync) {
+            dependsOn("assemble$variantCapped")
+
+            def templatePath = "$rootDir/template"
+
+            // get into the magisk dir
+            into magiskDir
+
+            // exclude the default module.prop
+            from(templatePath) {
+                exclude 'module.prop'
+            }
+
+            // include the module prop expanding as per user-defined fields
+            from(templatePath) {
+                include 'module.prop'
+                expand([
+                        id         : magiskModuleId,
+                        name       : moduleName,
+                        version    : moduleVersion,
+                        versionCode: moduleVersionCode.toString(),
+                        author     : moduleAuthor,
+                        description: moduleDescription,
+                ])
+                filter(FixCrLfFilter.class,
+                        eol: FixCrLfFilter.CrLf.newInstance("lf"))
+            }
+            // copy gotcha libraries into temp 'lib' folder
+            from("$buildDir/intermediates/stripped_native_libs/$variantLowered/stripReleaseDebugSymbols/out/lib") {
+                into 'lib'
+            }
+
+            doLast {
+                // bundle the zygisk module
+                file("$magiskDir/zygisk").mkdir()
+                fileTree("$magiskDir/lib").visit { f ->
+                    if (!f.directory) return
+                    def srcPath = Paths.get("${f.file.absolutePath}/lib${moduleLibraryName}.so")
+                    def dstPath = Paths.get("$magiskDir/zygisk/${f.path}.so")
+                    Files.move(srcPath, dstPath)
+                }
+                new File("$magiskDir/lib").deleteDir()
+            }
+        }
+
+        // task to zip magisk output module
+        task("zip${variantCapped}", type: Zip) {
+            dependsOn("prepareMagiskFiles${variantCapped}")
+            from magiskDir
+            archiveFileName = zipName
+            destinationDirectory = file("$outDir/$zipName")
+        }
+
+        // register the zip task after every assemble
+        variant.assembleProvider.get().finalizedBy("zip${variantCapped}")
+    }
 }
