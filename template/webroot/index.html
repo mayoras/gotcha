@@ -182,15 +182,71 @@
                 return "'" + s.replace(/'/g, "'\\''") + "'";
             }
 
-            function wrapExec(execFn) {
+            // KernelSU's WebUI exec is asynchronous: command output is delivered
+            // through a named global callback, NOT the return value. A plain
+            // `ksu.exec(cmd)` runs the command but throws stdout away — which is why
+            // writes worked but reads came back empty. This wraps the official 3-arg
+            // callback API in a Promise, falling back to a synchronous string-returning
+            // form if the 3-arg signature isn't supported.
+            function makeExec(host) {
+                return function exec(cmd, options = {}) {
+                    return new Promise((resolve, reject) => {
+                        const cb = `__exec_cb_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+                        let done = false,
+                            timer = null;
+                        const finish = (fn, v) => {
+                            if (done) return;
+                            done = true;
+                            if (timer) clearTimeout(timer);
+                            delete window[cb];
+                            fn(v);
+                        };
+                        window[cb] = (errno, stdout, stderr) => {
+                            if (Number(errno) === 0)
+                                finish(resolve, stdout ?? "");
+                            else
+                                finish(
+                                    reject,
+                                    new Error(
+                                        stderr ||
+                                            `exec failed (errno ${errno})`,
+                                    ),
+                                );
+                        };
+                        let ret;
+                        try {
+                            ret = host.exec(cmd, JSON.stringify(options), cb);
+                        } catch (e) {
+                            // 3-arg callback signature unsupported — try 1-arg sync form.
+                            try {
+                                ret = host.exec(cmd);
+                            } catch (e2) {
+                                finish(reject, e2);
+                                return;
+                            }
+                        }
+                        // Synchronous implementations return stdout and never call back.
+                        if (typeof ret === "string") {
+                            finish(resolve, ret);
+                            return;
+                        }
+                        timer = setTimeout(
+                            () => finish(reject, new Error("exec timed out")),
+                            10000,
+                        );
+                    });
+                };
+            }
+
+            function makeBridge(name, host) {
+                const exec = makeExec(host);
                 return {
-                    async readFile(p) {
-                        return await execFn(`cat "${p}" 2>/dev/null`);
-                    },
-                    async writeFile(p, content) {
+                    name,
+                    readFile: (p) => exec(`cat ${shellEscape(p)} 2>/dev/null`),
+                    writeFile: (p, c) => {
                         const tmp = p + ".tmp";
-                        await execFn(
-                            `printf '%s' ${shellEscape(content)} > "${tmp}" && mv "${tmp}" "${p}"`,
+                        return exec(
+                            `printf '%s' ${shellEscape(c)} > ${shellEscape(tmp)} && mv ${shellEscape(tmp)} ${shellEscape(p)}`,
                         );
                     },
                 };
@@ -203,19 +259,8 @@
                     { obj: window.apatch, name: "APatch" },
                 ];
                 for (const { obj, name } of candidates) {
-                    if (!obj) continue;
-                    // Prefer exec over native readFile/writeFile — exec is filesystem-direct
-                    // with no caching, and ksu.exec() may return a Promise in newer KSU versions
-                    if (obj.exec)
-                        return { ...wrapExec((cmd) => obj.exec(cmd)), name };
-                    if (obj.readFile && obj.writeFile) {
-                        return {
-                            name,
-                            readFile: (p) => Promise.resolve(obj.readFile(p)),
-                            writeFile: (p, c) =>
-                                Promise.resolve(obj.writeFile(p, c)),
-                        };
-                    }
+                    if (obj && typeof obj.exec === "function")
+                        return makeBridge(name, obj);
                 }
                 return null;
             }
@@ -278,7 +323,7 @@
                     return;
                 }
                 try {
-                    const text = await bridge.exec(`cat ${CONFIG_PATH}`);
+                    const text = await bridge.readFile(CONFIG_PATH);
                     if (!text && text !== "") {
                         setStatus(
                             "config.prop not found — showing defaults.",
