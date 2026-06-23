@@ -206,15 +206,15 @@ static void companion_handler(int i) {
     write(i, &delay, sizeof(delay));
 
 #if defined(__arm__)
-    std::regex gotchaLibraryPattern(".*gotcha.*arm\\.so$");
+    std::regex gotchaLibraryPattern(".*gotcha-gadget.*arm\\.so$");
 #elif defined(__aarch64__)
-    std::regex gotchaLibraryPattern(".*gotcha.*arm64\\.so$");
+    std::regex gotchaLibraryPattern(".*gotcha-gadget.*arm64\\.so$");
 #elif defined(__i386__)
-    std::regex gotchaLibraryPattern(".*gotcha.*x86\\.so$");
+    std::regex gotchaLibraryPattern(".*gotcha-gadget.*x86\\.so$");
 #elif defined(__x86_64__)
-    std::regex gotchaLibraryPattern(".*gotcha.*x86_64\\.so$");
+    std::regex gotchaLibraryPattern(".*gotcha-gadget.*x86_64\\.so$");
 #else
-    std::regex gotchaLibraryPattern(".*gotcha.*arm64\\.so$");
+    std::regex gotchaLibraryPattern(".*gotcha-gadget.*arm64\\.so$");
 #endif
     std::string gotchaLibraryName = findMatchingFile(moduleDir, gotchaLibraryPattern);
     if (gotchaLibraryName.empty()) {

@@ -30,11 +30,11 @@ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LINKER_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${LINKER_FLAGS}")
 
 # Declares the gotcha gadget that is dynamically injected by the Zygisk module
-add_library(${CMAKE_PROJECT_NAME}-gadget SHARED gadget.cpp)
-
-target_link_libraries(${GADGET_NAME} android log)
+add_library(${PROJECT_NAME} SHARED gadget.cpp)
 
 # Propagate debug flag from gradle (-DGOTCHA_DEBUG:BOOL=ON) into a compiler #define
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE GOTCHA_DEBUG)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE GOTCHA_DEBUG)
 endif()
+
+target_link_libraries(${PROJECT_NAME} android log)

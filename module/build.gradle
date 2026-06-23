@@ -78,13 +78,21 @@ afterEvaluate {
             }
 
             doLast {
-                // bundle the zygisk module
+                // bundle the zygisk module .so and the injected gadget .so per ABI
                 file("$magiskDir/zygisk").mkdir()
-                fileTree("$magiskDir/lib").visit { f ->
-                    if (!f.directory) return
-                    def srcPath = Paths.get("${f.file.absolutePath}/lib${moduleLibraryName}.so")
-                    def dstPath = Paths.get("$magiskDir/zygisk/${f.path}.so")
-                    Files.move(srcPath, dstPath)
+                file("$magiskDir/gadget").mkdir()
+                file("$magiskDir/lib").eachDir { abiDir ->
+                    def abi = abiDir.name
+
+                    // zygisk module: lib<name>.so -> zygisk/<abi>.so
+                    Files.move(
+                            Paths.get("${abiDir.absolutePath}/lib${moduleLibraryName}.so"),
+                            Paths.get("$magiskDir/zygisk/${abi}.so"))
+
+                    // injected payload: lib<name>-gadget.so -> gadget/<abi>.so
+                    Files.move(
+                            Paths.get("${abiDir.absolutePath}/lib${moduleLibraryName}-gadget.so"),
+                            Paths.get("$magiskDir/lib${moduleLibraryName}-gadget-${abi}.so"))
                 }
                 new File("$magiskDir/lib").deleteDir()
             }
