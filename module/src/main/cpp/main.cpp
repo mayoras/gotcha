@@ -21,6 +21,7 @@
 #include <vector>
 #include <filesystem>
 #include <regex>
+#include <dlfcn.h>
 
 #include <log.h>
 #include "zygisk.hpp"
@@ -107,14 +108,37 @@ static void copyFile(const char *src, const char *dst) {
     }
 }
 
-static void injection_fn(const char *packageName, const char *library_path, uint64_t delay) {
+static void injectionFn(const char *packageName, const char *libraryName, uint64_t delay) {
     LOGI("Gotcha library injection thread started for %s, library name: %s, usleep: %llu",
          packageName,
-         library_path,
+         libraryName,
          delay);
 
     // sleep for delay to ensure app is started and library is in place
     usleep(delay);
+
+    std::string gadgetPath =
+            "/data/data/" +
+            std::string(packageName) + "/" +
+            std::string(libraryName);
+
+    LOGI("lib_path=[%s]\n", gadgetPath.c_str());
+    std::filesystem::path libPath(gadgetPath);
+    if (!std::filesystem::exists(libPath)) {
+        LOGE("Library not found in target internal storage: %s", libPath.string().c_str());
+        return;
+    } else {
+        LOGI("Gadget is ready to load: %s", libPath.string().c_str());
+    }
+
+    void *handle = dlopen(gadgetPath.c_str(), RTLD_NOW);
+
+    if (handle == nullptr) {
+        LOGE("Failed to load gadget: %s", dlerror());
+        return;
+    } else {
+        LOGI("Gadget loaded successfully.");
+    }
 
     LOGI("Injection thread done.");
 }
@@ -139,7 +163,6 @@ public:
 
         // get the module file path
         std::string module_path = getPathFromFd(api->getModuleDir());
-        LOGD("module_path=[%s]\n", module_path.c_str());
         sendString(fd, module_path);
 
         std::string targetPackageName = recvString(fd);
@@ -172,7 +195,7 @@ public:
 
     void postAppSpecialize(const AppSpecializeArgs *args) override {
         if (_enableGotcha) {
-            std::thread t(injection_fn, _targetPackageName, _gotchaLibraryPath, _delay);
+            std::thread t(injectionFn, _targetPackageName, _gotchaLibraryPath, _delay);
             t.detach();
         }
     }
@@ -208,13 +231,13 @@ static void companion_handler(int i) {
 #if defined(__arm__)
     std::regex gotchaLibraryPattern(".*gotcha-gadget.*arm\\.so$");
 #elif defined(__aarch64__)
-    std::regex gotchaLibraryPattern(".*gotcha-gadget.*arm64\\.so$");
+    std::regex gotchaLibraryPattern(".*gotcha-gadget.*arm64-v8a\\.so$");
 #elif defined(__i386__)
     std::regex gotchaLibraryPattern(".*gotcha-gadget.*x86\\.so$");
 #elif defined(__x86_64__)
     std::regex gotchaLibraryPattern(".*gotcha-gadget.*x86_64\\.so$");
 #else
-    std::regex gotchaLibraryPattern(".*gotcha-gadget.*arm64\\.so$");
+    std::regex gotchaLibraryPattern(".*gotcha-gadget.*arm64-v8a\\.so$");
 #endif
     std::string gotchaLibraryName = findMatchingFile(moduleDir, gotchaLibraryPattern);
     if (gotchaLibraryName.empty()) {
