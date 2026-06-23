@@ -58,6 +58,11 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
     # List C/C++ source files with relative paths to this CMakeLists.txt.
         main.cpp)
 
+# Propagate debug flag from gradle (-DGOTCHA_DEBUG:BOOL=ON) into a compiler #define
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE GOTCHA_DEBUG)
+endif()
+
 # Specifies libraries CMake should link to your target library. You
 # can link libraries from various origins, such as libraries defined in this
 # build script, prebuilt third-party libraries, or Android system libraries.

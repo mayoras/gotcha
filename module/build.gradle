@@ -28,16 +28,6 @@ android {
         }
     }
 
-    buildTypes {
-        debug {
-            externalNativeBuild {
-                cmake {
-                    arguments "-DGOTCHA_DEBUG:BOOL=ON"
-                }
-            }
-        }
-    }
-
     ndkVersion '25.2.9519653'
     compileSdk rootProject.ext.compileSdkVersion
 
