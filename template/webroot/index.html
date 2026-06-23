@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>GOTcha Config</title>
   <style>
     :root {
@@ -20,7 +20,10 @@
       font-family: system-ui, sans-serif;
       background: var(--bg);
       color: var(--on-surface);
-      padding: 1.5rem;
+      padding: calc(env(safe-area-inset-top) + 1.5rem)
+               calc(env(safe-area-inset-right) + 1.5rem)
+               calc(env(safe-area-inset-bottom) + 1.5rem)
+               calc(env(safe-area-inset-left) + 1.5rem);
       max-width: 480px;
       margin: 0 auto;
     }
@@ -113,13 +116,12 @@
 
   function wrapExec(execFn) {
     return {
-      name: 'exec-fallback',
-      readFile(p) {
-        return execFn(`cat "${p}" 2>/dev/null`);
+      async readFile(p) {
+        return await execFn(`cat "${p}" 2>/dev/null`);
       },
-      writeFile(p, content) {
+      async writeFile(p, content) {
         const tmp = p + '.tmp';
-        execFn(`printf '%s' ${shellEscape(content)} > "${tmp}" && mv "${tmp}" "${p}"`);
+        await execFn(`printf '%s' ${shellEscape(content)} > "${tmp}" && mv "${tmp}" "${p}"`);
       },
     };
   }
@@ -132,14 +134,16 @@
     ];
     for (const { obj, name } of candidates) {
       if (!obj) continue;
+      // Prefer exec over native readFile/writeFile — exec is filesystem-direct
+      // with no caching, and ksu.exec() may return a Promise in newer KSU versions
+      if (obj.exec) return { ...wrapExec((cmd) => obj.exec(cmd)), name };
       if (obj.readFile && obj.writeFile) {
         return {
           name,
-          readFile:  (p)    => obj.readFile(p),
-          writeFile: (p, c) => obj.writeFile(p, c),
+          readFile:  (p)    => Promise.resolve(obj.readFile(p)),
+          writeFile: (p, c) => Promise.resolve(obj.writeFile(p, c)),
         };
       }
-      if (obj.exec) return wrapExec((cmd) => obj.exec(cmd));
     }
     return null;
   }
@@ -191,10 +195,10 @@
     statusEl.className = ok ? 'ok' : 'err';
   }
 
-  function loadFromDisk() {
+  async function loadFromDisk() {
     if (!bridge) { setStatus('No bridge — cannot read.', false); return; }
     try {
-      const text = bridge.readFile(CONFIG_PATH);
+      const text = await bridge.readFile(CONFIG_PATH);
       if (!text && text !== '') {
         setStatus('config.prop not found — showing defaults.', false);
         pkgInput.value   = 'com.example.test';
@@ -210,14 +214,14 @@
     }
   }
 
-  function saveToDisk() {
+  async function saveToDisk() {
     if (!bridge) { setStatus('No bridge — cannot save.', false); return; }
     const pkg   = pkgInput.value.trim();
     const delay = delayInput.value.trim();
     if (!pkg)              { setStatus('Package name cannot be empty.', false); return; }
     if (!/^\d+$/.test(delay)) { setStatus('Delay must be a non-negative integer.', false); return; }
     try {
-      bridge.writeFile(CONFIG_PATH, serializeConfig(pkg, delay));
+      await bridge.writeFile(CONFIG_PATH, serializeConfig(pkg, delay));
       setStatus('Saved. Reboot to apply.', true);
     } catch (e) {
       setStatus('Write error: ' + e, false);
