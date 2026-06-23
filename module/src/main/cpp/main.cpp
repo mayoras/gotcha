@@ -132,12 +132,12 @@ public:
         // Use JNI to fetch our process name
         const char *process_name = env->GetStringUTFChars(args->nice_name, nullptr);
 
+        int fd = api->connectCompanion();
+
         // get the module file path
         std::string module_path = getPathFromFd(api->getModuleDir());
         LOGD("module_path=[%s]\n", module_path.c_str());
-        sendString(api->connectCompanion(), module_path);
-
-        int fd = api->connectCompanion();
+        sendString(fd, module_path);
 
         std::string targetPackageName = recvString(fd);
 
@@ -150,7 +150,7 @@ public:
 
             uint64_t delay;
             read(fd, &delay, sizeof(delay));
-            LOGD("delay=[%lu]\n", delay);
+            LOGD("delay=[%llu]\n", delay);
             _delay = delay;
 
             std::string gotchaLibraryPath = recvString(fd);
