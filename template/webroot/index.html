@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GOTcha Config</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #121212;
+      --surface: #1e1e1e;
+      --on-surface: #e0e0e0;
+      --primary: #bb86fc;
+      --error: #cf6679;
+      --success: #4caf50;
+      --border: #333;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--on-surface);
+      padding: 1.5rem;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; color: var(--primary); }
+    .subtitle { font-size: 0.8rem; color: #888; margin-bottom: 1.5rem; }
+    .field { margin-bottom: 1.25rem; }
+    label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 0.4rem; }
+    input {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--on-surface);
+      font-size: 1rem;
+      outline: none;
+    }
+    input:focus { border-color: var(--primary); }
+    .hint { font-size: 0.75rem; color: #666; margin-top: 0.3rem; }
+    .actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+    button {
+      flex: 1;
+      padding: 0.65rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    button:disabled { opacity: 0.4; cursor: default; }
+    #btn-save { background: var(--primary); color: #000; font-weight: 600; }
+    #btn-reload { background: var(--surface); color: var(--on-surface); border: 1px solid var(--border); }
+    #status {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      min-height: 1.2em;
+    }
+    #status.ok  { color: var(--success); }
+    #status.err { color: var(--error); }
+    #bridge-info {
+      font-size: 0.75rem;
+      color: #666;
+      margin-bottom: 1.5rem;
+      padding: 0.4rem 0.6rem;
+      background: var(--surface);
+      border-radius: 4px;
+      border-left: 3px solid var(--border);
+    }
+    #bridge-info.no-bridge { border-left-color: var(--error); color: var(--error); }
+    .reboot-note { font-size: 0.75rem; color: #555; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <h1>GOTcha</h1>
+  <p class="subtitle">Zygisk injection configuration</p>
+
+  <div id="bridge-info">Detecting root bridge…</div>
+
+  <div class="field">
+    <label for="target_package">Target Package</label>
+    <input id="target_package" type="text"
+           placeholder="com.example.app"
+           autocomplete="off" autocorrect="off" spellcheck="false">
+    <p class="hint">Android package name of the app to inject into.</p>
+  </div>
+
+  <div class="field">
+    <label for="delay_us">Injection Delay (µs)</label>
+    <input id="delay_us" type="number" min="0" step="1000" placeholder="300000">
+    <p class="hint">Microseconds to wait after process fork before loading the gadget. 300000 = 0.3 s.</p>
+  </div>
+
+  <div class="actions">
+    <button id="btn-save" disabled>Save</button>
+    <button id="btn-reload">Reload</button>
+  </div>
+
+  <p id="status"></p>
+  <p class="reboot-note">Changes take effect after the next reboot.</p>
+
+  <script>
+  'use strict';
+
+  const CONFIG_PATH = '/data/adb/modules/gotcha/config.prop';
+
+  // ── Bridge abstraction ───────────────────────────────────────────────────────
+  function shellEscape(s) {
+    return "'" + s.replace(/'/g, "'\\''") + "'";
+  }
+
+  function wrapExec(execFn) {
+    return {
+      name: 'exec-fallback',
+      readFile(p) {
+        return execFn(`cat "${p}" 2>/dev/null`);
+      },
+      writeFile(p, content) {
+        const tmp = p + '.tmp';
+        execFn(`printf '%s' ${shellEscape(content)} > "${tmp}" && mv "${tmp}" "${p}"`);
+      },
+    };
+  }
+
+  function detectBridge() {
+    const candidates = [
+      { obj: window.ksu,    name: 'KernelSU' },
+      { obj: window.mmrl,   name: 'MMRL'     },
+      { obj: window.apatch, name: 'APatch'   },
+    ];
+    for (const { obj, name } of candidates) {
+      if (!obj) continue;
+      if (obj.readFile && obj.writeFile) {
+        return {
+          name,
+          readFile:  (p)    => obj.readFile(p),
+          writeFile: (p, c) => obj.writeFile(p, c),
+        };
+      }
+      if (obj.exec) return wrapExec((cmd) => obj.exec(cmd));
+    }
+    return null;
+  }
+
+  // ── Config parsing (mirrors C++ readConfig logic) ────────────────────────────
+  function parseConfig(text) {
+    const cfg = { target_package: 'com.example.test', delay_us: '300000' };
+    for (const raw of text.split('\n')) {
+      const line = raw.trim();
+      if (!line || line.startsWith('#')) continue;
+      const eq = line.indexOf('=');
+      if (eq < 0) continue;
+      const key = line.slice(0, eq).trim();
+      const val = line.slice(eq + 1).trim();
+      if (key === 'target_package' || key === 'delay_us') cfg[key] = val;
+    }
+    return cfg;
+  }
+
+  function serializeConfig(pkg, delay) {
+    return [
+      '# GOTcha module configuration',
+      '# target_package: Android package name of the app to inject into',
+      `target_package=${pkg}`,
+      '# delay_us: microseconds to wait after fork before dlopen',
+      `delay_us=${delay}`,
+      '',
+    ].join('\n');
+  }
+
+  // ── UI ────────────────────────────────────────────────────────────────────────
+  const bridge     = detectBridge();
+  const bridgeEl   = document.getElementById('bridge-info');
+  const btnSave    = document.getElementById('btn-save');
+  const statusEl   = document.getElementById('status');
+  const pkgInput   = document.getElementById('target_package');
+  const delayInput = document.getElementById('delay_us');
+
+  if (bridge) {
+    bridgeEl.textContent = `Bridge: ${bridge.name}`;
+    btnSave.disabled = false;
+  } else {
+    bridgeEl.textContent = 'No root bridge detected. Open this page in MMRL or KernelSU App.';
+    bridgeEl.classList.add('no-bridge');
+  }
+
+  function setStatus(msg, ok) {
+    statusEl.textContent = msg;
+    statusEl.className = ok ? 'ok' : 'err';
+  }
+
+  function loadFromDisk() {
+    if (!bridge) { setStatus('No bridge — cannot read.', false); return; }
+    try {
+      const text = bridge.readFile(CONFIG_PATH);
+      if (!text && text !== '') {
+        setStatus('config.prop not found — showing defaults.', false);
+        pkgInput.value   = 'com.example.test';
+        delayInput.value = '300000';
+        return;
+      }
+      const cfg = parseConfig(text);
+      pkgInput.value   = cfg.target_package;
+      delayInput.value = cfg.delay_us;
+      setStatus('Loaded from disk.', true);
+    } catch (e) {
+      setStatus('Read error: ' + e, false);
+    }
+  }
+
+  function saveToDisk() {
+    if (!bridge) { setStatus('No bridge — cannot save.', false); return; }
+    const pkg   = pkgInput.value.trim();
+    const delay = delayInput.value.trim();
+    if (!pkg)              { setStatus('Package name cannot be empty.', false); return; }
+    if (!/^\d+$/.test(delay)) { setStatus('Delay must be a non-negative integer.', false); return; }
+    try {
+      bridge.writeFile(CONFIG_PATH, serializeConfig(pkg, delay));
+      setStatus('Saved. Reboot to apply.', true);
+    } catch (e) {
+      setStatus('Write error: ' + e, false);
+    }
+  }
+
+  btnSave.addEventListener('click', saveToDisk);
+  document.getElementById('btn-reload').addEventListener('click', loadFromDisk);
+
+  loadFromDisk();
+  </script>
+</body>
+</html>

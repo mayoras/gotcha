@@ -1,0 +1,5 @@
+# GOTcha module configuration
+# target_package: Android package name of the app to inject into
+target_package=com.example.test
+# delay_us: microseconds to wait after fork before dlopen (300000 = 0.3 s)
+delay_us=300000
