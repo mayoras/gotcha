@@ -23,7 +23,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         externalNativeBuild {
             cmake {
-                arguments "-DMODULE_NAME:STRING=$moduleLibraryName", "-DMODULE_DIR:STRING=$magiskModuleId"
+                arguments "-DMODULE_NAME:STRING=$moduleLibraryName", "-DMODULE_DIR:STRING=$magiskModuleId", "-DGADGET_NAME:STRING=$moduleLibraryName-gadget"
             }
         }
     }
