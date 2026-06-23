@@ -55,6 +55,7 @@ static std::string findMatchingFile(const fs::path& directory, const std::regex&
             return filename;
         }
     }
+    LOGW("No matching file found in directory %s", directory.string().c_str());
     return ""; // Return an empty string if no match is found
 }
 
@@ -73,7 +74,7 @@ static std::string getPathFromFd(int fd) {
 }
 
 static void copyFile(const char *src, const char *dst) {
-    FILE *fsrc, *fdst;
+    FILE *fsrc = nullptr, *fdst = nullptr;
 
     fsrc = fopen(src, "rb");
     if (fsrc == nullptr) {
