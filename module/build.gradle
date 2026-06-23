@@ -28,6 +28,16 @@ android {
         }
     }
 
+    buildTypes {
+        debug {
+            externalNativeBuild {
+                cmake {
+                    arguments "-DGOTCHA_DEBUG:BOOL=ON"
+                }
+            }
+        }
+    }
+
     ndkVersion '25.2.9519653'
     compileSdk rootProject.ext.compileSdkVersion
 
@@ -73,7 +83,7 @@ afterEvaluate {
                         eol: FixCrLfFilter.CrLf.newInstance("lf"))
             }
             // copy gotcha libraries into temp 'lib' folder
-            from("$buildDir/intermediates/stripped_native_libs/$variantLowered/stripReleaseDebugSymbols/out/lib") {
+            from("$buildDir/intermediates/stripped_native_libs/$variantLowered/strip${variantCapped}DebugSymbols/out/lib") {
                 into 'lib'
             }
 
@@ -96,6 +106,7 @@ afterEvaluate {
             from magiskDir
             archiveFileName = zipName
             destinationDirectory = file("$outDir/$zipName")
+            print("ZIP: $destinationDirectory")
         }
 
         // register the zip task after every assemble

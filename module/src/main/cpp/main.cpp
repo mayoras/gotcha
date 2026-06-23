@@ -108,13 +108,15 @@ static void copyFile(const char *src, const char *dst) {
 }
 
 static void injection_fn(const char *packageName, const char *library_path, uint64_t delay) {
-    LOGD("Gotcha library injection thread started for %s, library name: %s, usleep: %lu",
+    LOGI("Gotcha library injection thread started for %s, library name: %s, usleep: %llu",
          packageName,
          library_path,
          delay);
 
     // sleep for delay to ensure app is started and library is in place
     usleep(delay);
+
+    LOGI("Injection thread done.");
 }
 
 class EntryPoint : public zygisk::ModuleBase {
@@ -143,7 +145,7 @@ public:
         std::string targetPackageName = recvString(fd);
 
         if (strcmp(process_name, targetPackageName.c_str()) == 0) {
-            LOGD("Enable gotcha for process=[%s]\n", process_name);
+            LOGI("Enable gotcha for process=[%s]\n", process_name);
             _enableGotcha = true;
             write(fd, &_enableGotcha, sizeof(_enableGotcha));
 
@@ -155,7 +157,7 @@ public:
             _delay = delay;
 
             std::string gotchaLibraryPath = recvString(fd);
-            LOGD("gotchaLibraryPath=[%s]\n", gotchaLibraryPath.c_str());
+            LOGI("gotchaLibraryPath=[%s]\n", gotchaLibraryPath.c_str());
             _gotchaLibraryPath = strdup(gotchaLibraryPath.c_str());
 
             close(fd);
@@ -217,6 +219,9 @@ static void companion_handler(int i) {
     std::string gotchaLibraryName = findMatchingFile(moduleDir, gotchaLibraryPattern);
     if (gotchaLibraryName.empty()) {
         LOGE("No gotcha library found in module dir");
+#if GOTCHA_DEBUG
+        sendString(i, gotchaLibraryName);
+#endif
         return;
     }
     sendString(i, gotchaLibraryName);
