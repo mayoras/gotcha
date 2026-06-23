@@ -123,11 +123,6 @@
                 border-left-color: var(--error);
                 color: var(--error);
             }
-            .reboot-note {
-                font-size: 0.75rem;
-                color: #555;
-                margin-top: 0.75rem;
-            }
         </style>
     </head>
     <body>
@@ -170,7 +165,6 @@
         </div>
 
         <p id="status"></p>
-        <p class="reboot-note">Changes take effect after the next reboot.</p>
 
         <script>
             "use strict";
@@ -362,7 +356,7 @@
                         CONFIG_PATH,
                         serializeConfig(pkg, delay),
                     );
-                    setStatus("Saved. Reboot to apply.", true);
+                    setStatus("Saved.", true);
                 } catch (e) {
                     setStatus("Write error: " + e, false);
                 }
