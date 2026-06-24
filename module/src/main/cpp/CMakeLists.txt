@@ -56,7 +56,8 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 # used in the AndroidManifest.xml file.
 add_library(${CMAKE_PROJECT_NAME} SHARED
     # List C/C++ source files with relative paths to this CMakeLists.txt.
-        main.cpp)
+        main.cpp
+        config.cpp)
 
 # Propagate debug flag from gradle (-DGOTCHA_DEBUG:BOOL=ON) into a compiler #define
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
