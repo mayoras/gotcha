@@ -86,14 +86,14 @@ static int dl_path_callback(struct dl_phdr_info *info, size_t size, void *data) 
     return 0;
 }
 
-static void *find_module_path(const char *lib_name) {
+static char *find_module_path(const char *lib_name) {
     FindPathData data = {
             .name = lib_name,
             .path = NULL,
     };
     dl_iterate_phdr(dl_path_callback, &data);
 
-    if (data.base != NULL) {
+    if (data.path != NULL) {
         // found using the linker
         return data.path;
     }
@@ -117,7 +117,7 @@ static void *find_module_path(const char *lib_name) {
                 char *full_path = strchr(line, '/');
                 if (full_path) {
                     path = strdup(full_path);
-                    LOGD("Found library path: %s via /proc/self/maps", result);
+                    LOGD("Found library path: %s via /proc/self/maps", path);
                     break;
                 }
             }
@@ -136,13 +136,23 @@ static void *find_module_path(const char *lib_name) {
 static void main() {
     const char *target_lib_name = "libc.so";
 
-    void *target_lib_base = find_module(target_lib_name);
+    void *target_lib_base = find_module_base(target_lib_name);
     if (target_lib_base == NULL) {
         LOGE("Failed to find library %s", target_lib_name);
         return;
     }
 
+    const char *target_lib_path = find_module_path(target_lib_name);
+    if (target_lib_path == NULL) {
+        LOGE("Failed to find library %s", target_lib_name);
+        return;
+    }
 
+    // print base and path
+    LOGI("\n#######\nTarget library base: %p\n#######", target_lib_base);
+    LOGI("\n#######\nTarget library path: %s\n#######", target_lib_path);
+
+    free(target_lib_path);
 }
 
 __attribute__((constructor))
